@@ -5,11 +5,12 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
-extern crate rand;
 extern crate sha1;
+extern crate walkdir;
 
 use std::fs::File;
-use std::io::Write;
+use std::io;
+use std::io::{Write,BufReader};
 
 use hyper::Client;
 use hyper::net::HttpsConnector;
@@ -18,11 +19,17 @@ use hyper_native_tls::NativeTlsClient;
 use backblaze_b2::raw::authorize::*;
 use backblaze_b2::raw::buckets::*;
 use backblaze_b2::raw::files::*;
+use backblaze_b2::raw::upload::*;
+
+use walkdir::WalkDir;
+use walkdir::DirEntry;
 
 #[derive(Deserialize)]
 struct Options {
     file_listing: String,
-    bucket_name: String
+    bucket_name: String,
+    backup_root: String,
+    ignored_prefixes_file: String,
 }
 
 fn get_bucket<'a>(buckets: &'a Vec<Bucket>, bucket_name: &str) -> Option<&'a Bucket> {
@@ -58,7 +65,52 @@ fn main() {
     };
 
     let upload = auth.get_upload_url(&bucket.bucket_id, &client).unwrap();
+    let prefixes = options.create_prefixes().unwrap();
 
+    let backup_manager = BackupManager {
+        client: client, connector: connector,
+        options: options, bucket: bucket,
+        file_listing: file_listing, auth: auth,
+        upload: upload, prefixes: prefixes
+    }
 
+    backup_manager.walk();
+
+}
+
+impl Options {
+    fn create_prefixes(&self) -> io::Result<Prefixes> {
+        let mut file = BufReader::new(&try!(File::open(&self.options.ignored_prefixes_file)));
+        let mut res = Vec::new();
+        let mut 
+        for line in file.lines() {
+            
+        }
+    }
+}
+struct Prefixes {
+    prefixes: Vec<Vec<String>>
+}
+
+struct BackupManager<'bucket> {
+    client: Client,
+    connector: HttpsConnector,
+    options: Options,
+    prefixes: Prefixes,
+    bucket: &'bucket Bucket,
+    file_listing: Vec<FileInfo>,
+    auth: B2Authorization,
+    upload: UploadAuthorization
+}
+
+impl<'bucket> BackupManager<'bucket> {
+    fn walk(self) {
+        let walker = WalkDir::new(&options.backup_root)
+            .follow_links(false)
+            .into_iter()
+            .filter_entry(|e| self.prefixes.allowed(e));
+        for entry in walker {
+        }
+    }
 }
 
